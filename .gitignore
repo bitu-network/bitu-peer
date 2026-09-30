@@ -34,3 +34,8 @@ test-results/
 *.log
 
 *.lnk
+
+
+
+src/service/off.txt
+src/server/off.txt
