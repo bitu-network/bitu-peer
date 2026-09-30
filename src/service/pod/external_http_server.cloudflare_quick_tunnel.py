@@ -1,4 +1,4 @@
-# file: src/server/external_http_server.cloudflare_quick_tunnel.py
+# file: src/service/pod/external_http_server.cloudflare_quick_tunnel.py
 # description: per-pod sibling of external_http_server.py. Runs a Cloudflare
 # quick tunnel (no account, no domain) that exposes the pod's http server at a
 # random https://<words>.trycloudflare.com URL, which changes on every run.

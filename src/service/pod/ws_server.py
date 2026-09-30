@@ -1,4 +1,4 @@
-# file: src/server/ws_server.py
+# file: src/service/pod/ws_server.py
 
 import asyncio
 import importlib.util

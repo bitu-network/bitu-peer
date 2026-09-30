@@ -1,4 +1,4 @@
-:: run.bat
+:: autorun.bat
 @echo off
 title BITU
 cd /d "%~dp0"

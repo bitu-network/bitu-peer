@@ -1,4 +1,4 @@
-# file: src/server/external_http_server.py
+# file: src/service/pod/external_http_server.py
 
 
 from __future__ import annotations

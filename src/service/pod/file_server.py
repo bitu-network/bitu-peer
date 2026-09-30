@@ -1,4 +1,4 @@
-# file: src/server/file_server.py
+# file: src/service/pod/file_server.py
 # NOTE: disabled (.py.off). A pod now has a single `port` and that port belongs
 # to the http server, so this raw-TCP front desk has nowhere to bind -- two
 # listeners on one port would collide. Re-enable only if it gets a port of its
@@ -18,10 +18,10 @@
 #          slice of the blob), or {"error": "..."} with no bytes following.
 #
 # Auto-discovered and launched once per drive by cli/start.py (any .py file
-# directly under server/ is spawned per drive found by
+# directly under service/pod is spawned per drive found by
 # lib/drives.find_bitu_drives(), with the drive letter as its sole argument),
 # only for drives with a valid <drive>:\I\-\bitu\config.json (see lib/drives.py).
-# Lives under server/ rather than service/ specifically because it opens a
+# Lives under service/pod/ rather than service/ specifically because it opens a
 # socket -- process/socket isolation per drive is what makes the mesh-network
 # simulation and sensitive-data isolation goals work; dedupe.py has no such
 # need and runs as one process for every drive instead (see service/dedupe.py).

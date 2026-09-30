@@ -2,7 +2,7 @@
 # description: centralizes everything about the per-drive BITU config file --
 # its location, schema (required/optional keys, defaults), and load/save/
 # validation logic. Other modules (pod/drives.py, pod/peers.py,
-# service/dedupe.py, server/file_server.py, cli/*.py) read AND write config
+# service/dedupe.py, service/pod/file_server.py, cli/*.py) read AND write config
 # through this module rather than touching config.json themselves, so a new
 # field only needs to be understood in one place.
 

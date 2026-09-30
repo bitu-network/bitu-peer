@@ -1,6 +1,6 @@
 # file: src/service/dedupe.py
 # description: global content-addressable dedupe service (the "librarian behind
-# the scenes"). Unlike file_server.py (per-drive, under server/ -- needs real
+# the scenes"). Unlike file_server.py (per-drive, under service/pod/ -- needs real
 # process/socket isolation for network simulation), dedupe has no networking
 # concern, so one process manages every opted-in pod: periodically rescans
 # for pods with a valid <pod>\I\-\bitu\config.json (see pod/drives.py) -- a
@@ -21,11 +21,13 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver, ObservedWatch
 
 from lib.dedupe_core import process_file, scan_pod, scan_root_for
 from pod.drives import find_bitu_drives
@@ -44,16 +46,16 @@ class _NewFileHandler(FileSystemEventHandler):
     def on_created(self, event):
         if event.is_directory:
             return
-        process_file(self.drive_root, Path(event.src_path), log=_log)
+        process_file(self.drive_root, Path(os.fsdecode(event.src_path)), log=_log)
 
     def on_moved(self, event):
         # A move/rename introduces a "new" path that also needs indexing.
         if event.is_directory:
             return
-        process_file(self.drive_root, Path(event.dest_path), log=_log)
+        process_file(self.drive_root, Path(os.fsdecode(event.dest_path)), log=_log)
 
 
-def _start_watching(observer: Observer, drive_root: Path):
+def _start_watching(observer: BaseObserver, drive_root: Path) -> ObservedWatch | None:
     """Run the startup/reconciliation scan for a newly seen pod and register a
     live watch on it. Returns the watchdog watch handle (for later
     unschedule()), or None if there's nothing to watch.
@@ -72,7 +74,7 @@ def main():
     observer = Observer()
     observer.start()
 
-    watched: dict[Path, object] = {}  # pod root (e.g. D:\ or D:\pod_1) -> watchdog watch handle
+    watched: dict[Path, ObservedWatch] = {}  # pod root (e.g. D:\ or D:\pod_1) -> watchdog watch handle
 
     _log(f"scanning for BITU pods every {DRIVE_RESCAN_INTERVAL_SECONDS}s.")
     try:
@@ -84,8 +86,8 @@ def main():
                 if root not in current:
                     try:
                         observer.unschedule(watched[root])
-                    except Exception:
-                        pass
+                    except Exception as e:  # noqa: BLE001 - a dead drive must not kill the service loop
+                        _log(f"unschedule failed for {root}: {e}")
                     del watched[root]
                     _log(f"stopped watching {root} (unplugged or config no longer valid).")
 

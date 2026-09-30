@@ -2,7 +2,7 @@
 # description: shared content-addressable-storage (CAS) logic for BITU's per-drive
 # hash blob tree at <drive>:\o\<byte1>\<byte2>\<full-hash>\content.<ext>.
 #
-# Used by service/dedupe.py (the live indexer/hardlinker), server/file_server.py
+# Used by service/dedupe.py (the live indexer/hardlinker), service/pod/file_server.py
 # (the network-facing reader), and any future one-off verify/fsck command, so the
 # "how do we lay out and validate a blob" logic lives in exactly one place.
 

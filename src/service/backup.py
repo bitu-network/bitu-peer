@@ -24,8 +24,8 @@
 # a file already linked into the CAS tree by a prior cycle is never re-hashed.
 #
 # Auto-discovered and launched once globally by cli/start.py (any .py file
-# directly under service/ -- as opposed to server/, which is per-drive; see
-# server/file_server.py -- is spawned once with no arguments) -- it discovers
+# directly under service/ -- as opposed to service/pod/, which is per-drive; see
+# service/pod/file_server.py -- is spawned once with no arguments) -- it discovers
 # its own targets each cycle, so plugging/unplugging a backup drive or a
 # source drive is picked up automatically on the next cycle.
 

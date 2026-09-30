@@ -1,6 +1,6 @@
 # file: src/lib/bootstrap.py
 # description: shared startup plumbing for anything that takes "a pod" as a
-# command-line argument -- the per-pod services under server/ (spawned by
+# command-line argument -- the per-pod services under service/pod/ (spawned by
 # cli/start.py with the pod's root path as their sole argument) and CLI tools
 # such as cli/dedupe.py. Keeps "how a pod argument is parsed and validated" in
 # exactly one place, so a new server is a few lines instead of a copy of the

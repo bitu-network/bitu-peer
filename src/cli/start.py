@@ -1,8 +1,8 @@
 # file: src/cli/start.py
 # description: master startup routine. Auto-discovers and launches every
-# service under src/service/ (global services, spawned once with no
+# service directly under src/service/ (global services, spawned once with no
 # arguments -- e.g. hotkey_engine.py, backup.py, dedupe.py: none of these
-# need per-drive process isolation) and src/server/ (per-drive services,
+# need per-drive process isolation) and src/service/pod/ (per-drive services,
 # spawned once per pod found by pod/drives.find_bitu_drives() -- a drive or a
 # volume nested inside one, e.g. D:\pod_1 -- with that pod's root path as the
 # sole argument, e.g. external_http_server.py, which
@@ -18,8 +18,8 @@
 # denylist, so a newly dropped .py file still starts automatically. It is read
 # once at startup, so edits take effect on the next restart.
 #
-# A drive with no valid <drive>:\I\-\bitu\config.json (see lib/drives.py)
-# gets none of the per-drive (server/) services -- that's the intended way to
+# A drive with no valid <drive>:\I\-\bitu\config.json (see pod/drives.py)
+# gets none of the per-drive (service/pod/) services -- that's the intended way to
 # opt a drive in/out, no separate GUI/TUI toggle needed.
 #
 # Public URLs: a service that publishes a pod (e.g. the cloudflare quick
@@ -63,7 +63,7 @@ def _discover_services(folder: Path) -> list[Path]:
     off = _read_off_list(folder)
     skipped = sorted(p.name for p in folder.glob("*.py") if p.stem in off)
     for name in skipped:
-        print(f"[-] Skipping {folder.name}/{name} (listed in off.txt)", flush=True)
+        print(f"[-] Skipping {folder.parent.name}/{folder.name}/{name} (listed in off.txt)", flush=True)
     return sorted(
         p for p in folder.glob("*.py")
         if p.is_file() and not p.name.startswith("_") and p.stem not in off
@@ -111,7 +111,7 @@ def main():
     env["BITU_URL_DIR"] = str(url_dir)
 
     global_scripts = _discover_services(src_dir / "service")
-    drive_scripts = _discover_services(src_dir / "server")
+    drive_scripts = _discover_services(src_dir / "service" / "pod")
 
     print("=== Launching BITU Background Services (Console Output Active) ===", flush=True)
     procs: list[subprocess.Popen] = []
