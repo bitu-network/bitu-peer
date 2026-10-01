@@ -1,324 +1,155 @@
 <!-- file: src/http/external/login.html -->
-
 <!DOCTYPE html>
 <html>
-
 <head>
-
     <meta charset="utf-8">
-
-    <title>
-        BITU Login
-    </title>
-
+    <title>BITU Login</title>
     <link rel="stylesheet" href="style.css">
-
 </head>
-
-
 <body>
 
+<h1>BITU</h1>
+<p>Bits I Trust You</p>
 
-<h1>
-    BITU
-</h1>
+<h2>Login</h2>
 
+<p id="status">Preparing your key...</p>
 
-<p>
-    Bits I Trust You
-</p>
+<div id="loginBox" hidden>
+    <p id="applyIntro"></p>
+    <pre id="applyText"></pre>
+    <p><a id="mailLink" href="#" hidden>Open in your email app</a></p>
+</div>
 
-
-<h2>
-    Login
-</h2>
-
-
-<button id="connectButton">
-    Connect Wallet
-</button>
-
-
-<button id="signButton" disabled>
-    Sign Login Message
-</button>
-
-
-<pre id="message"></pre>
-
-
-<p id="status">
-    Waiting for wallet...
-</p>
-
-
+<p><small>Use a wallet instead (coming soon)</small></p>
 
 <script type="module">
+const $ = id => document.getElementById(id);
+const status = $("status");
 
+const toHex = buf => [...new Uint8Array(buf)]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
 
-let provider = null;
-let address = null;
-let siweMessage = null;
+// ---- key storage: one Ed25519 keypair in IndexedDB ----------------------
+// extractable=true so the console can offer "export my key" later.
 
-
-
-const connectButton =
-    document.getElementById(
-        "connectButton"
-    );
-
-
-const signButton =
-    document.getElementById(
-        "signButton"
-    );
-
-
-const status =
-    document.getElementById(
-        "status"
-    );
-
-
-const messageBox =
-    document.getElementById(
-        "message"
-    );
-
-
-
-
-
-async function findWallet() {
-
-
-    /*
-        EIP-6963 wallet discovery.
-
-        Multiple wallets can announce themselves.
-        We don't choose a wallet.
-        The user chooses.
-    */
-
-
-    const wallets = [];
-
-
-    window.addEventListener(
-        "eip6963:announceProvider",
-        event => {
-
-            wallets.push(
-                event.detail
-            );
-
-        }
-    );
-
-
-    window.dispatchEvent(
-        new Event(
-            "eip6963:requestProvider"
-        )
-    );
-
-
-    await new Promise(
-        resolve =>
-            setTimeout(
-                resolve,
-                500
-            )
-    );
-
-
-    if (
-        wallets.length === 0
-    ) {
-
-        throw new Error(
-            "No compatible wallet found"
-        );
-
-    }
-
-
-    /*
-        Temporary:
-        use first discovered wallet.
-
-        Later replace with
-        a wallet selection UI.
-    */
-
-    return wallets[0].provider;
-
+function openDb() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open("bitu", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("keys");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
 }
 
+function dbRequest(db, mode, fn) {
+    return new Promise((resolve, reject) => {
+        const req = fn(db.transaction("keys", mode).objectStore("keys"));
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
 
+async function getKeyPair() {
+    const db = await openDb();
+    let pair = await dbRequest(db, "readonly", s => s.get("identity"));
+    let created = false;
+    if (!pair) {
+        // Throws on browsers without WebCrypto Ed25519 -> caught in start().
+        pair = await crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"]);
+        await dbRequest(db, "readwrite", s => s.put(pair, "identity"));
+        created = true;
+    }
+    return { pair, created };
+}
 
+// ---- server calls --------------------------------------------------------
 
+async function login(pair, publicKey) {
+    const cRes = await fetch("/api/challenge");
+    if (!cRes.ok) throw new Error("challenge failed: HTTP " + cRes.status);
+    const challenge = await cRes.json();
 
-connectButton.onclick =
-async () => {
+    const signature = toHex(await crypto.subtle.sign(
+        "Ed25519", pair.privateKey, new TextEncoder().encode(challenge.message)));
 
+    const vRes = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nonce: challenge.nonce, public_key: publicKey, signature }),
+    });
+    if (!vRes.ok) throw new Error("verify failed: HTTP " + vRes.status);
+    return vRes.json();   // { identity, member }
+}
 
+async function contactEmail() {
     try {
-
-
-        provider =
-            await findWallet();
-
-
-
-        const accounts =
-            await provider.request({
-
-                method:
-                    "eth_requestAccounts"
-
-            });
-
-
-
-        address =
-            accounts[0];
-
-
-
-        status.textContent =
-            "Connected: "
-            + address;
-
-
-
-        signButton.disabled =
-            false;
-
-
-
+        return (await (await fetch("/api/contact")).json()).email || "";
+    } catch (error) {
+        return "";
     }
-    catch(error) {
+}
 
+// ---- membership application ----------------------------------------------
 
-        status.textContent =
-            error.message;
+function showApply(identity, email) {
+    const text = "Hello,\n\nPlease add me as a member of your BITU pod.\n\n"
+        + "My public key:\n" + identity + "\n";
 
+    $("applyIntro").textContent = email
+        ? "To apply for membership, email " + email + " with this text:"
+        : "To apply for membership, send this text to the owner of this pod:";
+    $("applyText").textContent = text;
 
+    if (email) {
+        const link = $("mailLink");
+        link.href = "mailto:" + email
+            + "?subject=" + encodeURIComponent("BITU membership request")
+            + "&body=" + encodeURIComponent(text);
+        link.hidden = false;
     }
+    $("loginBox").hidden = false;
+}
 
+// ---- flow ----------------------------------------------------------------
 
-};
-
-
-
-
-
-
-signButton.onclick =
-async () => {
-
-
-    const domain =
-        window.location.host;
-
-
-    const uri =
-        window.location.origin;
-
-
-
-    const issuedAt =
-        new Date()
-            .toISOString();
-
-
-
-    /*
-        SIWE EIP-4361 style message.
-    */
-
-
-    siweMessage =
-
-`BITU wants you to sign in with your Ethereum account:
-
-${address}
-
-Sign in to BITU.
-
-URI: ${uri}
-Version: 1
-Chain ID: 1
-Nonce: ${crypto.randomUUID()}
-Issued At: ${issuedAt}`;
-
-
-
-    messageBox.textContent =
-        siweMessage;
-
-
-
+async function start() {
+    let keys;
     try {
-
-
-        const signature =
-            await provider.request({
-
-                method:
-                    "personal_sign",
-
-                params:
-                    [
-                        siweMessage,
-                        address
-                    ]
-
-            });
-
-
-
-        console.log({
-
-            message:
-                siweMessage,
-
-            signature
-
-        });
-
-
-
+        keys = await getKeyPair();
+    } catch (error) {
         status.textContent =
-            "Signed successfully";
-
-
-        /*
-            Next step:
-            POST message + signature
-            to Python backend.
-        */
-
-
-    }
-    catch(error) {
-
-
-        status.textContent =
-            error.message;
-
-
+            "Your browser is too old for BITU login. Please update your browser and try again.";
+        return;
     }
 
+    const publicKey = toHex(await crypto.subtle.exportKey("raw", keys.pair.publicKey));
+    const identity = "ed25519:" + publicKey;
+    const email = await contactEmail();
 
-};
+    if (keys.created) {
+        // A brand-new key cannot be a member yet: skip the login attempt.
+        status.textContent = "Welcome! A new BITU key was created for you in this browser.";
+        showApply(identity, email);
+        return;
+    }
 
+    status.textContent = "Signing in...";
+    try {
+        const result = await login(keys.pair, publicKey);
+        if (result.member) {
+            window.location.href = "/";
+            return;
+        }
+        status.textContent = "Your key is valid, but it isn't a member of this pod yet.";
+    } catch (error) {
+        status.textContent = "Login wasn't successful.";
+    }
+    showApply(identity, email);
+}
 
-
+start();
 </script>
 
-
 </body>
-
 </html>
