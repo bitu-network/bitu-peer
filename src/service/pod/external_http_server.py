@@ -11,10 +11,11 @@ WEB_PUBLIC_ROOT = get_src_root() / "http" / "external"
 
 
 def main():
-    drive_root, _config, port = load_pod_or_exit("http_server")
+    drive_root, config, port = load_pod_or_exit("http_server")
     print(f"[http_server] {drive_root} -> 127.0.0.1:{port} serving {WEB_PUBLIC_ROOT}", flush=True)
 
-    app = create_app(WEB_PUBLIC_ROOT)
+    # Gated: only members listed in <pod>\I\-\bitu\bitu.db may use the app.
+    app = create_app(WEB_PUBLIC_ROOT, drive_root=drive_root, contact_email=config.get("email"))
     app.run(host="127.0.0.1", port=port)
 
 
