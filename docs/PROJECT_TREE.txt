@@ -268,7 +268,6 @@ bitu-peer/
 │   │   │   └── tags.py
 │   │   ├── __init__.py
 │   │   ├── auth.py
-│   │   ├── bootstrap.py
 │   │   ├── cas.py
 │   │   ├── clipboard.py
 │   │   ├── clipboard_utils.py
@@ -339,5 +338,4 @@ bitu-peer/
 ├── playwright.config.js
 ├── pyproject.toml
 ├── README.md
-├── requirements.txt
-└── start_server.bat
+└── requirements.txt
