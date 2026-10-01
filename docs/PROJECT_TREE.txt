@@ -110,6 +110,10 @@ bitu-peer/
 │   │   │   │   ├── interfaces.py
 │   │   │   │   └── sockets.py
 │   │   │   └── clipboard_as_qrcode.py
+│   │   ├── user/
+│   │   │   ├── add.py
+│   │   │   ├── list.py
+│   │   │   └── remove.py
 │   │   ├── __init__.py
 │   │   ├── __main__.py
 │   │   ├── backup.py
@@ -176,6 +180,10 @@ bitu-peer/
 │   │   │   ├── cities15000.json
 │   │   │   └── components.js
 │   │   ├── external/
+│   │   │   ├── api/
+│   │   │   │   ├── challenge.py
+│   │   │   │   ├── contact.py
+│   │   │   │   └── verify.py
 │   │   │   ├── app.js
 │   │   │   ├── index.html
 │   │   │   ├── login.html
@@ -259,6 +267,7 @@ bitu-peer/
 │   │   ├── str/
 │   │   │   └── tags.py
 │   │   ├── __init__.py
+│   │   ├── auth.py
 │   │   ├── bootstrap.py
 │   │   ├── cas.py
 │   │   ├── clipboard.py
@@ -298,7 +307,8 @@ bitu-peer/
 │   │   ├── folders.py
 │   │   ├── keys.py
 │   │   ├── paths.py
-│   │   └── peers.py
+│   │   ├── peers.py
+│   │   └── users.py
 │   ├── service/
 │   │   ├── pod/
 │   │   │   ├── external_http_server.cloudflare_quick_tunnel.py
