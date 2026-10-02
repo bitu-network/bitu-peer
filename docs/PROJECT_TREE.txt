@@ -176,19 +176,23 @@ bitu-peer/
 │   │   │   │   ├── globe-view.js
 │   │   │   │   └── globe.test.js
 │   │   │   ├── js/
-│   │   │   │   └── color.js
+│   │   │   │   ├── color.js
+│   │   │   │   ├── edges.js
+│   │   │   │   └── identity.js
 │   │   │   ├── cities15000.json
 │   │   │   └── components.js
 │   │   ├── external/
 │   │   │   ├── api/
 │   │   │   │   ├── challenge.py
 │   │   │   │   ├── contact.py
+│   │   │   │   ├── trust.py
 │   │   │   │   └── verify.py
 │   │   │   ├── app.js
 │   │   │   ├── index.html
 │   │   │   ├── login.html
 │   │   │   ├── login_ttt.html
-│   │   │   └── style.css
+│   │   │   ├── style.css
+│   │   │   └── trust.html
 │   │   └── internal/
 │   │       ├── +/
 │   │       │   ├── .py.off
@@ -272,6 +276,8 @@ bitu-peer/
 │   │   ├── clipboard.py
 │   │   ├── clipboard_utils.py
 │   │   ├── dedupe_core.py
+│   │   ├── edges.py
+│   │   ├── edges_test.py
 │   │   ├── ensures_single_instance.py
 │   │   ├── file_reader.py
 │   │   ├── formatters.py
@@ -286,6 +292,7 @@ bitu-peer/
 │   │   ├── project_finder.py
 │   │   ├── signer.py
 │   │   ├── tree_render.py
+│   │   ├── trust_api_test.py
 │   │   ├── vid_decompose.py
 │   │   ├── vid_join.py
 │   │   ├── vid_split.py
@@ -303,6 +310,7 @@ bitu-peer/
 │   │   ├── bootstrap.py
 │   │   ├── config.py
 │   │   ├── drives.py
+│   │   ├── edges.py
 │   │   ├── folders.py
 │   │   ├── keys.py
 │   │   ├── paths.py

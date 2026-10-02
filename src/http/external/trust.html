@@ -1,0 +1,257 @@
+<!-- file: src/http/external/trust.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Trust</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        table { margin: 16px auto; border-collapse: collapse; table-layout: fixed; width: 820px; max-width: 100%; }
+        th, td { padding: 6px 12px; border-bottom: 1px solid #ddd; text-align: left; vertical-align: middle; }
+        th:nth-child(1) { width: 50%; }
+        th:nth-child(2) { width: 15%; }
+        th:nth-child(3) { width: 35%; }
+        td input[type=text] { width: 100%; box-sizing: border-box; }
+        td input[type=number] { width: 5em; }
+        .invalid { outline: 1px solid #b00020; }
+        code { word-break: break-all; }
+    </style>
+</head>
+<body>
+
+<h2>Trust</h2>
+
+<p id="status">Loading...</p>
+<p><small>Your key: <code id="me"></code></small></p>
+
+<table>
+    <thead>
+        <tr><th>Peer</th><th>Trusts</th><th>Trusted</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+    <tfoot id="addRow" hidden>
+        <tr>
+            <td><input id="addKey" type="text" placeholder="Peer key" spellcheck="false"></td>
+            <td></td>
+            <td>
+                <input id="addTrust" type="number" min="0" max="255" step="1">
+                <button id="addButton">Add</button>
+            </td>
+        </tr>
+    </tfoot>
+</table>
+<p id="empty" hidden>No peers yet.</p>
+
+<script type="module">
+import { loadIdentity, sign } from "/assets/js/identity.js";
+import { normalizeIdentity, sizeText, trustMessage } from "/assets/js/edges.js";
+
+const $ = id => document.getElementById(id);
+
+let me = null;         // this browser's key: { pair, identity }, or null
+let state = null;      // last answer of GET /api/trust
+let editable = false;  // only when this browser's key IS the logged-in identity
+let busy = false;
+
+function setStatus(text, isError = false) {
+    $("status").textContent = text;
+    $("status").style.color = isError ? "#b00020" : "";
+}
+
+async function api(method, body) {
+    const res = await fetch("/api/trust", {
+        method,
+        headers: body ? { "Content-Type": "application/json" } : {},
+        body: body ? JSON.stringify(body) : undefined,
+    });
+    if (res.status === 401) {
+        window.location.href = "/login";
+        throw new Error("not signed in");
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || "HTTP " + res.status);
+    return data;
+}
+
+// ---- helpers (textContent only: keys and aliases are never treated as HTML) ----
+
+// A key as shown to people: just the hex, without the "scheme:" prefix.
+const bare = identity => identity.slice(identity.indexOf(":") + 1);
+const shortKey = identity => bare(identity).slice(0, 8) + "..." + bare(identity).slice(-6);
+
+function parseTrust(text) {
+    const t = text.trim();
+    if (!/^[0-9]{1,3}$/.test(t)) return null;
+    const n = Number(t);
+    return n <= 255 ? n : null;
+}
+
+function textCell(text) {
+    const td = document.createElement("td");
+    td.textContent = text;
+    return td;
+}
+
+function button(label, onclick) {
+    const b = document.createElement("button");
+    b.textContent = label;
+    b.onclick = onclick;
+    return b;
+}
+
+// One entry per peer, merging what they trust me with and what I trust them with.
+function peers() {
+    const byKey = new Map();
+    const entry = (identity, alias) => {
+        if (!byKey.has(identity)) byKey.set(identity, { identity, alias: null, trusts: null, trusted: null });
+        const peer = byKey.get(identity);
+        if (alias) peer.alias = alias;
+        return peer;
+    };
+    for (const e of state.incoming) entry(e.issuer, e.alias).trusts = e.trust;
+    for (const e of state.outgoing) entry(e.subject, e.alias).trusted = e.trust;
+    const name = p => p.alias || p.identity;
+    return [...byKey.values()].sort((a, b) => name(a).localeCompare(name(b)));
+}
+
+// ---- rendering ----
+
+function peerCell(peer) {
+    const td = textCell(peer.alias ? peer.alias + " (" + shortKey(peer.identity) + ")" : shortKey(peer.identity));
+    td.title = bare(peer.identity);
+    return td;
+}
+
+function trustsCell(n) {
+    const td = textCell(n === null ? "-" : String(n));
+    if (n !== null) td.title = sizeText(n);
+    return td;
+}
+
+// My trust in the peer: a number I can edit. Save/Withdraw appears only once
+// the value differs from what is stored; clearing the number withdraws trust.
+function trustedCell(peer) {
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = 0;
+    input.max = 255;
+    input.step = 1;
+    input.value = peer.trusted === null ? "" : peer.trusted;
+    input.disabled = !editable;
+
+    const save = button("Save", () => submit(peer.identity, parseTrust(input.value)));
+    const sync = () => {
+        const text = input.value.trim();
+        const n = text === "" ? null : parseTrust(text);
+        const valid = text === "" || n !== null;
+        input.classList.toggle("invalid", !valid);
+        input.title = n === null ? "" : sizeText(n);
+        save.hidden = !editable || !valid || n === peer.trusted;
+        save.textContent = n === null ? "Withdraw" : "Save";
+    };
+    input.oninput = sync;
+    input.onkeydown = e => { if (e.key === "Enter" && !save.hidden) save.click(); };
+    sync();
+
+    const td = document.createElement("td");
+    td.append(input, " ", save);
+    return td;
+}
+
+function render() {
+    const body = $("rows");
+    body.replaceChildren();
+    const list = peers();
+    $("empty").hidden = list.length > 0;
+    for (const peer of list) {
+        const tr = document.createElement("tr");
+        tr.append(peerCell(peer), trustsCell(peer.trusts), trustedCell(peer));
+        body.append(tr);
+    }
+}
+
+async function reload() {
+    state = await api("GET");
+    render();
+}
+
+// ---- changing trust: sign here, send, reload ----
+
+async function submit(subject, trust) {
+    if (busy || !editable) return false;
+    busy = true;
+    try {
+        setStatus("Signing...");
+        const message = trustMessage(state.identity, subject, trust, Date.now());
+        const signature = await sign(me.pair, message);
+        setStatus("Saving...");
+        await api("POST", { message, signature });
+        await reload();
+        setStatus("Saved.");
+        return true;
+    } catch (error) {
+        setStatus(error.message, true);
+        return false;
+    } finally {
+        busy = false;
+    }
+}
+
+// ---- the add row: its fields sit under Peer and Trusted ----
+
+$("addTrust").oninput = () => {
+    const n = parseTrust($("addTrust").value);
+    $("addTrust").title = n === null ? "" : sizeText(n);
+};
+
+$("addButton").onclick = async () => {
+    const subject = normalizeIdentity($("addKey").value);
+    const trust = parseTrust($("addTrust").value);
+    if (!subject) return setStatus("That doesn't look like a valid peer key.", true);
+    if (subject === state.identity) return setStatus("You can't trust your own key.", true);
+    if (trust === null) return setStatus("Trusted must be a whole number from 0 to 255.", true);
+    if (await submit(subject, trust)) {
+        $("addKey").value = "";
+        $("addTrust").value = "";
+        $("addTrust").title = "";
+    }
+};
+
+for (const id of ["addKey", "addTrust"]) {
+    $(id).onkeydown = e => { if (e.key === "Enter") $("addButton").click(); };
+}
+
+// ---- start ----
+
+async function start() {
+    try {
+        me = await loadIdentity();
+    } catch (error) {
+        setStatus("Your browser is too old for this page. Please update it and try again.", true);
+        return;
+    }
+    try {
+        await reload();
+    } catch (error) {
+        setStatus("Couldn't load your trust: " + error.message, true);
+        return;
+    }
+    $("me").textContent = bare(state.identity);
+
+    if (!me) {
+        setStatus("This browser doesn't have your key, so it can't sign changes. Use the browser where you first logged in.", true);
+    } else if (me.identity !== state.identity) {
+        setStatus("This browser's key isn't the one you are logged in with, so it can't sign changes.", true);
+    } else {
+        editable = true;
+        setStatus("");
+        $("addRow").hidden = false;
+        render();   // re-render now that editing is allowed
+    }
+}
+
+start();
+</script>
+
+</body>
+</html>
