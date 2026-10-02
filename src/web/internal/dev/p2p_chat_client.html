@@ -1,0 +1,247 @@
+<!-- file: src/web/internal/dev/p2p_chat_client.html -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PeerJS P2P Test (ExpressVPN Bypass)</title>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 0 20px;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 16px 20px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      border: 1px solid #334155;
+    }
+
+    h2 {
+      margin-top: 0;
+      font-size: 1.1rem;
+      color: #38bdf8;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    input {
+      flex: 1;
+      background: #0f172a;
+      border: 1px solid #475569;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-family: inherit;
+    }
+
+    button {
+      background: #0284c7;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover {
+      background: #0369a1;
+    }
+
+    button:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+
+    #log {
+      background: #0f172a;
+      padding: 12px;
+      border-radius: 4px;
+      height: 220px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.85rem;
+      border: 1px solid #334155;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      margin-right: 6px;
+    }
+
+    .status-dot.online {
+      background: #22c55e;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>P2P ExpressVPN Test</h1>
+
+  <div class="card">
+    <h2>1. Local Node</h2>
+    <p><span id="status-dot" class="status-dot"></span><span id="status-text">Initializing...</span></p>
+    <p>Your Peer ID: <strong id="my-id" style="color: #c084fc;">Generating...</strong></p>
+  </div>
+
+  <div class="card">
+    <h2>2. Target Peer</h2>
+    <div class="row">
+      <input type="text" id="remote-id-input" placeholder="Paste remote Peer ID here">
+      <button id="connect-btn">Connect</button>
+    </div>
+    <small style="color: #94a3b8; display: block; margin-top: 6px;">
+      ⚠️ Rule: Only ONE device clicks Connect. The other device must do nothing!
+    </small>
+  </div>
+
+  <div class="card">
+    <h2>3. Direct / Relayed Data Pipe</h2>
+    <div class="row" style="margin-bottom: 12px;">
+      <input type="text" id="msg-input" placeholder="Type message..." disabled>
+      <button id="send-btn" disabled>Send</button>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const myIdEl = document.getElementById('my-id');
+    const statusTextEl = document.getElementById('status-text');
+    const statusDotEl = document.getElementById('status-dot');
+    const remoteIdInput = document.getElementById('remote-id-input');
+    const connectBtn = document.getElementById('connect-btn');
+    const msgInput = document.getElementById('msg-input');
+    const sendBtn = document.getElementById('send-btn');
+    const logEl = document.getElementById('log');
+
+    let activeConnection = null;
+
+    function appendLog(msg, color = '#94a3b8') {
+      const entry = document.createElement('div');
+      const time = new Date().toLocaleTimeString();
+      entry.style.color = color;
+      entry.textContent = `[${time}] ${msg}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // PeerJS initialized with encrypted TURNS over port 443 (HTTPS)
+    const peer = new Peer({
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:openrelay.metered.ca:80' },
+          // Regular TURN
+          {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelay',
+            credential: 'openrelay'
+          },
+          // TURNS (Encrypted TLS over port 443 - Bypasses VPN blocks)
+          {
+            urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelay',
+            credential: 'openrelay'
+          }
+        ]
+      }
+    });
+
+    peer.on('open', (id) => {
+      myIdEl.textContent = id;
+      statusTextEl.textContent = 'Ready (TLS Relay active)';
+      statusDotEl.classList.add('online');
+      appendLog('Node initialized with TURNS (TLS) fallback.');
+    });
+
+    peer.on('error', (err) => {
+      appendLog(`PeerJS Error: ${err.type}`, '#f87171');
+    });
+
+    // Handle incoming peer connection
+    peer.on('connection', (conn) => {
+      appendLog(`Incoming connection request from: ${conn.peer}`);
+      bindDataEvents(conn);
+    });
+
+    // Handle outgoing peer connection
+    connectBtn.addEventListener('click', () => {
+      const targetId = remoteIdInput.value.trim();
+      if (!targetId) return alert('Enter a Peer ID first.');
+
+      appendLog(`Initiating connection to ${targetId}...`);
+      const conn = peer.connect(targetId, { reliable: true });
+      bindDataEvents(conn);
+    });
+
+    function bindDataEvents(conn) {
+      activeConnection = conn;
+
+      // Monitor WebRTC internal ICE state
+      conn.on('iceStateChanged', (state) => {
+        appendLog(`ICE State: ${state}`, '#eab308');
+      });
+
+      conn.on('open', async () => {
+        appendLog(`SUCCESS: Pipe connected to ${conn.peer}!`, '#4ade80');
+        msgInput.disabled = false;
+        sendBtn.disabled = false;
+
+        // Extract public sockets from WebRTC stats
+        const stats = await conn.peerConnection.getStats();
+        stats.forEach(report => {
+          // Look for active candidate pairs
+          if (report.type === 'local-candidate' && (report.candidateType === 'srflx' || report.candidateType === 'relay')) {
+            appendLog(`Local Public Socket: ${report.ip}:${report.port} (${report.candidateType.toUpperCase()} via ${report.protocol})`, '#c084fc');
+          }
+          if (report.type === 'remote-candidate' && (report.candidateType === 'srflx' || report.candidateType === 'relay')) {
+            appendLog(`Remote Public Socket: ${report.ip}:${report.port} (${report.candidateType.toUpperCase()} via ${report.protocol})`, '#c084fc');
+          }
+        });
+      });
+
+      conn.on('data', (data) => {
+        appendLog(`Received: ${data}`, '#38bdf8');
+      });
+
+      conn.on('close', () => {
+        appendLog('Connection closed.', '#fbbf24');
+        msgInput.disabled = true;
+        sendBtn.disabled = true;
+      });
+    }
+
+    function sendPayload() {
+      const message = msgInput.value.trim();
+      if (message && activeConnection) {
+        activeConnection.send(message);
+        appendLog(`Sent: ${message}`, '#f43f5e');
+        msgInput.value = '';
+      }
+    }
+
+    sendBtn.addEventListener('click', sendPayload);
+    msgInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendPayload();
+    });
+  </script>
+</body>
+
+</html>

@@ -26,6 +26,11 @@ bitu-peer/
 │   │   │   └── utils.py
 │   │   ├── vscode.py
 │   │   └── vscode_test.py
+│   ├── biou/
+│   │   ├── js/
+│   │   │   └── credge.js
+│   │   ├── credge.py
+│   │   └── credge_test.py
 │   ├── cli/
 │   │   ├── apps/
 │   │   │   └── explorer/
@@ -162,89 +167,6 @@ bitu-peer/
 │   │   ├── w_alt_ctrl_shift.py
 │   │   ├── x_alt.py
 │   │   └── y_alt_ctrl_shift.py
-│   ├── http/
-│   │   ├── assets/
-│   │   │   ├── favicon/
-│   │   │   │   ├── android-chrome-192x192.png
-│   │   │   │   ├── android-chrome-512x512.png
-│   │   │   │   ├── apple-touch-icon.png
-│   │   │   │   ├── favicon-16x16.png
-│   │   │   │   ├── favicon-32x32.png
-│   │   │   │   ├── favicon.ico
-│   │   │   │   └── site.webmanifest
-│   │   │   ├── globe/
-│   │   │   │   ├── globe-view.js
-│   │   │   │   └── globe.test.js
-│   │   │   ├── js/
-│   │   │   │   ├── color.js
-│   │   │   │   ├── edges.js
-│   │   │   │   └── identity.js
-│   │   │   ├── cities15000.json
-│   │   │   └── components.js
-│   │   ├── external/
-│   │   │   ├── api/
-│   │   │   │   ├── challenge.py
-│   │   │   │   ├── contact.py
-│   │   │   │   ├── trust.py
-│   │   │   │   └── verify.py
-│   │   │   ├── app.js
-│   │   │   ├── index.html
-│   │   │   ├── login.html
-│   │   │   ├── login_ttt.html
-│   │   │   ├── style.css
-│   │   │   └── trust.html
-│   │   └── internal/
-│   │       ├── +/
-│   │       │   ├── .py.off
-│   │       │   ├── index.html
-│   │       │   └── index.js
-│   │       ├── dev/
-│   │       │   ├── foo/
-│   │       │   │   ├── leaflet/
-│   │       │   │   │   └── index.html
-│   │       │   │   ├── webglearth/
-│   │       │   │   │   ├── greatCircle.js
-│   │       │   │   │   ├── index.html
-│   │       │   │   │   ├── webglearth.js
-│   │       │   │   │   └── webglearth.py
-│   │       │   │   └── globegl.html
-│   │       │   ├── globe/
-│   │       │   │   ├── 1-basic/
-│   │       │   │   │   └── index.html
-│   │       │   │   ├── 2-click/
-│   │       │   │   │   ├── index.html
-│   │       │   │   │   └── index.js
-│   │       │   │   ├── 3-poly/
-│   │       │   │   │   ├── index.html
-│   │       │   │   │   └── index.js
-│   │       │   │   ├── 4-voronoi/
-│   │       │   │   │   ├── index.html
-│   │       │   │   │   └── index.js
-│   │       │   │   ├── 5-geonames/
-│   │       │   │   │   ├── index.html
-│   │       │   │   │   └── index.js
-│   │       │   │   ├── 6-slider/
-│   │       │   │   │   ├── api.py
-│   │       │   │   │   ├── index.html
-│   │       │   │   │   └── index.js
-│   │       │   │   └── 7-latest/
-│   │       │   │       ├── api.py
-│   │       │   │       ├── index.html
-│   │       │   │       └── index.js
-│   │       │   ├── wip/
-│   │       │   │   └── cwd-watch/
-│   │       │   │       ├── cwd-foo.ws.py
-│   │       │   │       ├── cwd_foo.html
-│   │       │   │       ├── grant-dir-access.html
-│   │       │   │       ├── watch-cwd.html
-│   │       │   │       ├── ws-integration-test.html
-│   │       │   │       └── ws-integration-test.py
-│   │       │   ├── hue.html
-│   │       │   ├── p2p_chat_client.html
-│   │       │   ├── ws-test.html
-│   │       │   └── ws-test.ws.py
-│   │       ├── index.html
-│   │       └── tui_concept_selector.py
 │   ├── lib/
 │   │   ├── deps/
 │   │   │   ├── models.py
@@ -271,19 +193,13 @@ bitu-peer/
 │   │   ├── str/
 │   │   │   └── tags.py
 │   │   ├── __init__.py
-│   │   ├── auth.py
-│   │   ├── cas.py
 │   │   ├── clipboard.py
 │   │   ├── clipboard_utils.py
-│   │   ├── dedupe_core.py
-│   │   ├── edges.py
-│   │   ├── edges_test.py
 │   │   ├── ensures_single_instance.py
 │   │   ├── file_reader.py
 │   │   ├── formatters.py
 │   │   ├── git_utils.py
 │   │   ├── hotkey_context.py
-│   │   ├── http_app.py
 │   │   ├── low_level_helpers.py
 │   │   ├── models.py
 │   │   ├── network.py
@@ -292,7 +208,6 @@ bitu-peer/
 │   │   ├── project_finder.py
 │   │   ├── signer.py
 │   │   ├── tree_render.py
-│   │   ├── trust_api_test.py
 │   │   ├── vid_decompose.py
 │   │   ├── vid_join.py
 │   │   ├── vid_split.py
@@ -308,9 +223,11 @@ bitu-peer/
 │   │   ├── __init__.py
 │   │   ├── blobs.py
 │   │   ├── bootstrap.py
+│   │   ├── cas.py
 │   │   ├── config.py
+│   │   ├── credges.py
+│   │   ├── dedupe_core.py
 │   │   ├── drives.py
-│   │   ├── edges.py
 │   │   ├── folders.py
 │   │   ├── keys.py
 │   │   ├── paths.py
@@ -326,6 +243,91 @@ bitu-peer/
 │   │   ├── dedupe.py
 │   │   ├── hotkey_engine.py
 │   │   └── internal_http_server.py
+│   ├── web/
+│   │   ├── assets/
+│   │   │   ├── favicon/
+│   │   │   │   ├── android-chrome-192x192.png
+│   │   │   │   ├── android-chrome-512x512.png
+│   │   │   │   ├── apple-touch-icon.png
+│   │   │   │   ├── favicon-16x16.png
+│   │   │   │   ├── favicon-32x32.png
+│   │   │   │   ├── favicon.ico
+│   │   │   │   └── site.webmanifest
+│   │   │   ├── globe/
+│   │   │   │   ├── globe-view.js
+│   │   │   │   └── globe.test.js
+│   │   │   ├── js/
+│   │   │   │   ├── color.js
+│   │   │   │   └── identity.js
+│   │   │   ├── cities15000.json
+│   │   │   └── components.js
+│   │   ├── external/
+│   │   │   ├── api/
+│   │   │   │   ├── challenge.py
+│   │   │   │   ├── contact.py
+│   │   │   │   ├── trust.py
+│   │   │   │   └── verify.py
+│   │   │   ├── app.js
+│   │   │   ├── index.html
+│   │   │   ├── login.html
+│   │   │   ├── login_ttt.html
+│   │   │   ├── style.css
+│   │   │   └── trust.html
+│   │   ├── internal/
+│   │   │   ├── +/
+│   │   │   │   ├── .py.off
+│   │   │   │   ├── index.html
+│   │   │   │   └── index.js
+│   │   │   ├── dev/
+│   │   │   │   ├── foo/
+│   │   │   │   │   ├── leaflet/
+│   │   │   │   │   │   └── index.html
+│   │   │   │   │   ├── webglearth/
+│   │   │   │   │   │   ├── greatCircle.js
+│   │   │   │   │   │   ├── index.html
+│   │   │   │   │   │   ├── webglearth.js
+│   │   │   │   │   │   └── webglearth.py
+│   │   │   │   │   └── globegl.html
+│   │   │   │   ├── globe/
+│   │   │   │   │   ├── 1-basic/
+│   │   │   │   │   │   └── index.html
+│   │   │   │   │   ├── 2-click/
+│   │   │   │   │   │   ├── index.html
+│   │   │   │   │   │   └── index.js
+│   │   │   │   │   ├── 3-poly/
+│   │   │   │   │   │   ├── index.html
+│   │   │   │   │   │   └── index.js
+│   │   │   │   │   ├── 4-voronoi/
+│   │   │   │   │   │   ├── index.html
+│   │   │   │   │   │   └── index.js
+│   │   │   │   │   ├── 5-geonames/
+│   │   │   │   │   │   ├── index.html
+│   │   │   │   │   │   └── index.js
+│   │   │   │   │   ├── 6-slider/
+│   │   │   │   │   │   ├── api.py
+│   │   │   │   │   │   ├── index.html
+│   │   │   │   │   │   └── index.js
+│   │   │   │   │   └── 7-latest/
+│   │   │   │   │       ├── api.py
+│   │   │   │   │       ├── index.html
+│   │   │   │   │       └── index.js
+│   │   │   │   ├── wip/
+│   │   │   │   │   └── cwd-watch/
+│   │   │   │   │       ├── cwd-foo.ws.py
+│   │   │   │   │       ├── cwd_foo.html
+│   │   │   │   │       ├── grant-dir-access.html
+│   │   │   │   │       ├── watch-cwd.html
+│   │   │   │   │       ├── ws-integration-test.html
+│   │   │   │   │       └── ws-integration-test.py
+│   │   │   │   ├── hue.html
+│   │   │   │   ├── p2p_chat_client.html
+│   │   │   │   ├── ws-test.html
+│   │   │   │   └── ws-test.ws.py
+│   │   │   ├── index.html
+│   │   │   └── tui_concept_selector.py
+│   │   ├── app.py
+│   │   ├── session.py
+│   │   └── trust_api_test.py
 │   ├── graph.py
 │   ├── install.py
 │   └── project.py

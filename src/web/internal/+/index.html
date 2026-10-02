@@ -1,0 +1,663 @@
+<!-- file: src/web/internal/+/index.html -->
+
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>H3 Location Picker</title>
+
+    <meta charset="utf-8">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+
+    <style>
+        html,
+        body,
+        #map {
+            height: 100%;
+            margin: 0;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+
+            z-index: 1000;
+
+            background: white;
+            padding: 10px;
+
+            font-family: monospace;
+
+            border-radius: 5px;
+        }
+    </style>
+
+</head>
+
+
+<body>
+
+
+
+    <div id="info">
+        <div id="status">Scale selection mode</div>
+        <button id="confirmButton" style="display:none;">
+            Confirm Selection
+        </button>
+    </div>
+
+    <div id="map"></div>
+
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/h3-js"></script>
+    <script src="index.js?v=4"></script>
+
+    <script>
+
+
+        let lastMousePosition = null;
+
+        const confirmButton =
+            document.getElementById("confirmButton");
+
+
+
+        // WebSocket connection to backend
+
+        const contextPath =
+            new URLSearchParams(window.location.search)
+                .get("context_path");
+
+
+        const ws =
+            new WebSocket(
+                "ws://localhost:8765"
+                + window.location.pathname
+            );
+
+
+        ws.onopen = () => {
+            console.log("H3 websocket connected");
+        };
+
+
+        ws.onclose = () => {
+            console.log("H3 websocket disconnected");
+        };
+
+
+        const savedView =
+            JSON.parse(
+                localStorage.getItem("h3_view")
+            );
+
+
+        const map =
+            L.map("map")
+                .setView(
+                    savedView
+                        ?
+                        [savedView.lat, savedView.lng]
+                        :
+                        [40.7128, -74.0060],
+
+                    savedView
+                        ?
+                        savedView.zoom
+                        :
+                        10
+                );
+
+
+        const params =
+            new URLSearchParams(
+                window.location.search
+            );
+
+        const satelliteMode =
+            params.get("satellite") === "true";
+
+
+        const tileLayer =
+            satelliteMode
+
+                ?
+
+                L.tileLayer(
+                    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                    {
+                        attribution:
+                            "Tiles &copy; Esri"
+                    }
+                )
+
+                :
+
+                L.tileLayer(
+                    "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+                    {
+                        attribution:
+                            "&copy; OpenStreetMap contributors &copy; CARTO"
+                    }
+                );
+
+
+        tileLayer.addTo(map);
+        map.on(
+            "moveend",
+            () => {
+
+                const center =
+                    map.getCenter();
+
+                localStorage.setItem(
+                    "h3_view",
+                    JSON.stringify({
+                        lat: center.lat,
+                        lng: center.lng,
+                        zoom: map.getZoom()
+                    })
+                );
+
+            }
+        );
+
+
+
+        let hoveredHex = null;
+
+        let selectionResolution = null;
+        let manualResolution = null;
+
+        let selectedCells = new Set();
+
+        let cellPolygons = new Map();
+
+
+
+
+
+
+
+        ws.onopen = () => {
+            console.log("WebSocket connected");
+        };
+
+
+        ws.onclose = () => {
+            console.log("WebSocket disconnected");
+        };
+
+
+        ws.onerror = error => {
+            console.error(
+                "WebSocket error:",
+                error
+            );
+        };
+
+
+        confirmButton.onclick = () => {
+
+            const message = {
+                type: "selection",
+                context_path: contextPath,
+                cells: [
+                    ...selectedCells
+                ]
+            };
+
+
+            console.log(
+                "Sending selection:",
+                message
+            );
+
+
+            ws.send(
+                JSON.stringify(message)
+            );
+
+        };
+
+
+        function updateHover(latlng) {
+
+
+            const resolution =
+                getActiveResolution();
+
+
+            const cell =
+                h3.latLngToCell(
+                    latlng.lat,
+                    latlng.lng,
+                    resolution
+                );
+
+
+            const boundary =
+                h3.cellToBoundary(
+                    cell
+                );
+
+
+            if (!hoveredHex) {
+
+                hoveredHex =
+                    L.polygon(
+                        boundary,
+                        {
+                            color: "orange",
+                            weight: 2,
+                            fill: true,
+                            fillOpacity: 0.15,
+                            interactive: false
+                        }
+                    )
+                        .addTo(map);
+
+            }
+            else {
+
+                hoveredHex.setLatLngs(
+                    boundary
+                );
+
+            }
+
+
+            document
+                .getElementById("status")
+                .innerHTML =
+                "Resolution: "
+                + resolution
+                + "<br>"
+                + cell;
+
+        }
+
+
+
+        function redrawCells() {
+
+
+            for (
+                const polygon of cellPolygons.values()
+            ) {
+
+                map.removeLayer(
+                    polygon
+                );
+
+            }
+
+
+            cellPolygons.clear();
+
+
+
+            for (
+                const cell of selectedCells
+            ) {
+
+                const polygon =
+                    L.polygon(
+                        h3.cellToBoundary(cell),
+                        {
+                            color: "blue",
+                            weight: 2,
+                            fill: true,
+                            fillOpacity: 0.25
+                        }
+                    )
+                        .addTo(map);
+
+
+                cellPolygons.set(
+                    cell,
+                    polygon
+                );
+
+            }
+
+        }
+
+        function getActiveResolution() {
+
+            if (
+                manualResolution !== null
+            ) {
+                return manualResolution;
+            }
+
+
+            if (
+                selectionResolution !== null
+            ) {
+                return selectionResolution;
+            }
+
+
+            return getViewportResolution();
+
+        }
+
+
+
+        map.on(
+            "mousemove",
+            event => {
+
+                lastMousePosition = event.latlng;
+
+                updateHover(
+                    event.latlng
+                );
+
+            }
+        );
+
+        map.on(
+            "wheel",
+            event => {
+
+                if (
+                    map.getZoom() !== map.getMaxZoom()
+                ) {
+                    return;
+                }
+
+
+                event.originalEvent.preventDefault();
+
+
+                if (
+                    manualResolution === null
+                ) {
+
+                    manualResolution =
+                        getViewportResolution();
+
+                }
+
+
+                if (
+                    event.originalEvent.deltaY < 0
+                ) {
+
+                    manualResolution =
+                        Math.min(
+                            manualResolution + 1,
+                            15
+                        );
+
+                }
+                else {
+
+                    manualResolution =
+                        Math.max(
+                            manualResolution - 1,
+                            0
+                        );
+
+                }
+
+
+                console.log(
+                    "H3 selector resolution:",
+                    manualResolution
+                );
+
+
+                if (
+                    lastMousePosition !== null
+                ) {
+
+                    updateHover(
+                        lastMousePosition
+                    );
+
+                }
+
+            }
+        );
+
+
+        map.on(
+            "zoomend",
+            () => {
+
+                manualResolution = null;
+
+
+                if (
+                    map.getZoom() === map.getMaxZoom()
+                ) {
+
+                    console.log(
+                        "Needle sharpening mode activated"
+                    );
+
+                }
+                else {
+
+                    console.log(
+                        "Normal map zoom mode"
+                    );
+
+                }
+
+                if (
+                    lastMousePosition !== null
+                ) {
+
+                    updateHover(
+                        lastMousePosition
+                    );
+
+                }
+
+            }
+        );
+
+
+
+        map.on(
+            "click",
+            event => {
+
+
+                if (
+                    selectionResolution === null
+                ) {
+
+
+                    selectionResolution =
+                        getActiveResolution();
+
+                }
+
+
+                const cell =
+                    h3.latLngToCell(
+                        event.latlng.lat,
+                        event.latlng.lng,
+                        selectionResolution
+                    );
+
+
+                let removed = false;
+
+
+                // Remove exact cell
+                if (
+                    selectedCells.has(cell)
+                ) {
+
+                    selectedCells.delete(cell);
+
+                    removed = true;
+
+                }
+
+
+                // Remove parent if clicking inside a selected parent
+                for (
+                    const selected of [...selectedCells]
+                ) {
+
+                    if (
+                        h3.getResolution(selected) <
+                        h3.getResolution(cell)
+                        &&
+                        h3.cellToParent(
+                            cell,
+                            h3.getResolution(selected)
+                        ) === selected
+                    ) {
+
+                        selectedCells.delete(
+                            selected
+                        );
+
+                        removed = true;
+
+                    }
+
+                }
+
+
+                if (!removed) {
+
+                    selectedCells.add(
+                        cell
+                    );
+
+                }
+
+
+                selectedCells =
+                    compressCells(
+                        selectedCells
+                    );
+
+                confirmButton.style.display =
+                    selectedCells.size > 0
+                        ? "inline-block"
+                        : "none";
+
+                if (
+                    selectedCells.size === 0
+                ) {
+
+                    selectionResolution = null;
+
+                }
+
+
+                redrawCells();
+
+            }
+        );
+
+
+
+        document.addEventListener(
+            "keydown",
+            event => {
+
+                if (map.getZoom() !== map.getMaxZoom()) {
+                    return;
+                }
+
+                if (
+                    event.key === "+"
+                    ||
+                    event.key === "="
+                ) {
+
+                    if (
+                        manualResolution === null
+                    ) {
+
+                        manualResolution =
+                            getViewportResolution();
+
+                    }
+
+                    manualResolution =
+                        Math.min(
+                            manualResolution + 1,
+                            15
+                        );
+
+
+                    console.log(
+                        "Sharpen:",
+                        manualResolution
+                    );
+
+
+                    if (
+                        lastMousePosition !== null
+                    ) {
+
+                        updateHover(
+                            lastMousePosition
+                        );
+
+                    }
+
+                }
+
+
+                if (
+                    event.key === "-"
+                ) {
+
+                    if (
+                        manualResolution === null
+                    ) {
+
+                        manualResolution =
+                            getViewportResolution();
+
+                    }
+
+                    manualResolution =
+                        Math.max(
+                            manualResolution - 1,
+                            0
+                        );
+
+
+                    console.log(
+                        "Dull:",
+                        manualResolution
+                    );
+
+
+                    if (
+                        lastMousePosition !== null
+                    ) {
+
+                        updateHover(
+                            lastMousePosition
+                        );
+
+                    }
+
+                }
+
+            }
+        );
+    </script>
+
+</body>
+
+</html>

@@ -1,0 +1,49 @@
+<!-- file: src/web/internal/dev/foo/leaflet/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaflet Globe Test</title>
+  <meta charset="utf-8" />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <style>
+    body, html { margin:0; padding:0; width:100%; height:100%; }
+    #globe_div { width:100%; height:100%; }
+  </style>
+</head>
+<body>
+<div id="globe_div"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.globe@0.1.4/dist/leaflet.globe.min.js"></script>
+<script>
+  // Initialize Leaflet map with globe view
+  const map = L.map('globe_div', {
+    worldCopyJump: true,
+    center: [0, 0],
+    zoom: 2,
+  });
+
+  // Add tile layer
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap'
+  }).addTo(map);
+
+  // Add random markers
+  for (let i = 0; i < 10; i++) {
+    const lat = (Math.random() * 180) - 90;
+    const lng = (Math.random() * 360) - 180;
+    L.circleMarker([lat, lng], { radius: 5, color: 'red' }).addTo(map);
+    console.log('Random marker at:', lat, lng);
+  }
+
+  // Click to add marker
+  map.on('click', e => {
+    L.circleMarker([e.latlng.lat, e.latlng.lng], { radius: 5, color: 'blue' }).addTo(map);
+    console.log('Marker added at:', e.latlng.lat, e.latlng.lng);
+  });
+</script>
+</body>
+</html>

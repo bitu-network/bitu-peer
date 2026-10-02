@@ -1,0 +1,53 @@
+<!-- file: src/web/internal/dev/ws-test.html -->
+
+<!DOCTYPE html>
+<html>
+
+<body>
+
+<h3>Type something and see it logged in the backend.</h3>
+
+<input id="answer">
+<button id="send">Send</button>
+
+
+<script>
+
+const ws =
+    new WebSocket(
+        "ws://localhost:8765/ws-test.html"
+    );
+
+
+document
+    .getElementById("send")
+    .onclick = () => {
+
+        const answer =
+            document
+                .getElementById("answer")
+                .value;
+
+
+        ws.send(answer);
+
+    };
+
+
+ws.onopen = () => {
+    console.log("WebSocket connected");
+};
+
+
+ws.onmessage = event => {
+    console.log(
+        "Server:",
+        event.data
+    );
+};
+
+</script>
+
+</body>
+
+</html>

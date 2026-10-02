@@ -1,0 +1,18 @@
+<!-- file: src/web/internal/dev/wip/cwd-watch/cwd_foo.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CWD Foo</title>
+</head>
+<body>
+    <h1>CWD Foo Test</h1>
+    <script>
+        // connect to WS using this page's path as URL parameter
+        const ws_path = window.location.pathname; // e.g., /cwd/cwd_foo.html
+        const ws = new WebSocket(`ws://localhost:8765${ws_path}`);
+        ws.onopen = () => console.log("Connected to WS for path:", ws_path);
+        ws.onmessage = e => console.log("Message from server:", e.data);
+    </script>
+</body>
+</html>

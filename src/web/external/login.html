@@ -1,0 +1,155 @@
+<!-- file: src/web/external/login.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>BITU Login</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>BITU</h1>
+<p>Bits I Trust You</p>
+
+<h2>Login</h2>
+
+<p id="status">Preparing your key...</p>
+
+<div id="loginBox" hidden>
+    <p id="applyIntro"></p>
+    <pre id="applyText"></pre>
+    <p><a id="mailLink" href="#" hidden>Open in your email app</a></p>
+</div>
+
+<p><small>Use a wallet instead (coming soon)</small></p>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const status = $("status");
+
+const toHex = buf => [...new Uint8Array(buf)]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+
+// ---- key storage: one Ed25519 keypair in IndexedDB ----------------------
+// extractable=true so the console can offer "export my key" later.
+
+function openDb() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open("bitu", 1);
+        req.onupgradeneeded = () => req.result.createObjectStore("keys");
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+function dbRequest(db, mode, fn) {
+    return new Promise((resolve, reject) => {
+        const req = fn(db.transaction("keys", mode).objectStore("keys"));
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function getKeyPair() {
+    const db = await openDb();
+    let pair = await dbRequest(db, "readonly", s => s.get("identity"));
+    let created = false;
+    if (!pair) {
+        // Throws on browsers without WebCrypto Ed25519 -> caught in start().
+        pair = await crypto.subtle.generateKey("Ed25519", true, ["sign", "verify"]);
+        await dbRequest(db, "readwrite", s => s.put(pair, "identity"));
+        created = true;
+    }
+    return { pair, created };
+}
+
+// ---- server calls --------------------------------------------------------
+
+async function login(pair, publicKey) {
+    const cRes = await fetch("/api/challenge");
+    if (!cRes.ok) throw new Error("challenge failed: HTTP " + cRes.status);
+    const challenge = await cRes.json();
+
+    const signature = toHex(await crypto.subtle.sign(
+        "Ed25519", pair.privateKey, new TextEncoder().encode(challenge.message)));
+
+    const vRes = await fetch("/api/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nonce: challenge.nonce, public_key: publicKey, signature }),
+    });
+    if (!vRes.ok) throw new Error("verify failed: HTTP " + vRes.status);
+    return vRes.json();   // { identity, member }
+}
+
+async function contactEmail() {
+    try {
+        return (await (await fetch("/api/contact")).json()).email || "";
+    } catch (error) {
+        return "";
+    }
+}
+
+// ---- membership application ----------------------------------------------
+
+function showApply(identity, email) {
+    const text = "Hello,\n\nPlease add me as a member of your BITU pod.\n\n"
+        + "My public key:\n" + identity + "\n";
+
+    $("applyIntro").textContent = email
+        ? "To apply for membership, email " + email + " with this text:"
+        : "To apply for membership, send this text to the owner of this pod:";
+    $("applyText").textContent = text;
+
+    if (email) {
+        const link = $("mailLink");
+        link.href = "mailto:" + email
+            + "?subject=" + encodeURIComponent("BITU membership request")
+            + "&body=" + encodeURIComponent(text);
+        link.hidden = false;
+    }
+    $("loginBox").hidden = false;
+}
+
+// ---- flow ----------------------------------------------------------------
+
+async function start() {
+    let keys;
+    try {
+        keys = await getKeyPair();
+    } catch (error) {
+        status.textContent =
+            "Your browser is too old for BITU login. Please update your browser and try again.";
+        return;
+    }
+
+    const publicKey = toHex(await crypto.subtle.exportKey("raw", keys.pair.publicKey));
+    const identity = "ed25519:" + publicKey;
+    const email = await contactEmail();
+
+    if (keys.created) {
+        // A brand-new key cannot be a member yet: skip the login attempt.
+        status.textContent = "Welcome! A new BITU key was created for you in this browser.";
+        showApply(identity, email);
+        return;
+    }
+
+    status.textContent = "Signing in...";
+    try {
+        const result = await login(keys.pair, publicKey);
+        if (result.member) {
+            window.location.href = "/";
+            return;
+        }
+        status.textContent = "Your key is valid, but it isn't a member of this pod yet.";
+    } catch (error) {
+        status.textContent = "Login wasn't successful.";
+    }
+    showApply(identity, email);
+}
+
+start();
+</script>
+
+</body>
+</html>
