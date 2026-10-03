@@ -93,6 +93,11 @@ def watch_directory(root_dir: Path, interval: float = 0.5):
             break
 
 
+def run(project_root: Path) -> None:
+    """Watcher entry point used by cli.dev.watch.__main__ (blocks forever)."""
+    watch_directory(project_root)
+
+
 def main():
     project_root = Path.cwd()
     if "--watch" in sys.argv or len(sys.argv) == 1:
