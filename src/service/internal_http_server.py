@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-from lib.http_app import create_app
+from web.app import create_app
 from project import get_src_root
 
 BIND_HOST = "127.0.0.1"
 PORT = 80
 
-WEB_LOCAL_ROOT = get_src_root() / "http" / "internal"
+WEB_LOCAL_ROOT = get_src_root() / "web" / "internal"
 
 
 def main():

@@ -40,34 +40,9 @@ import time
 from pathlib import Path
 
 from lib.ensures_single_instance import ensure_single_instance
+from lib.off_list import discover_scripts
 from pod.drives import find_bitu_drives
 from project import get_project_root, get_src_root
-
-
-def _read_off_list(folder: Path) -> set[str]:
-    """Names listed in <folder>/off.txt (gitignored, per-machine denylist)."""
-    off_file = folder / "off.txt"
-    if not off_file.is_file():
-        return set()
-    names = set()
-    for line in off_file.read_text(encoding="utf-8").splitlines():
-        line = line.split("#", 1)[0].strip()
-        if line:
-            names.add(line.removesuffix(".py"))
-    return names
-
-
-def _discover_services(folder: Path) -> list[Path]:
-    if not folder.is_dir():
-        return []
-    off = _read_off_list(folder)
-    skipped = sorted(p.name for p in folder.glob("*.py") if p.stem in off)
-    for name in skipped:
-        print(f"[-] Skipping {folder.parent.name}/{folder.name}/{name} (listed in off.txt)", flush=True)
-    return sorted(
-        p for p in folder.glob("*.py")
-        if p.is_file() and not p.name.startswith("_") and p.stem not in off
-    )
 
 
 def _poll_urls(url_dir: Path, urls: dict[str, str]) -> bool:
@@ -110,8 +85,8 @@ def main():
     env["PYTHONUNBUFFERED"] = "1"
     env["BITU_URL_DIR"] = str(url_dir)
 
-    global_scripts = _discover_services(src_dir / "service")
-    drive_scripts = _discover_services(src_dir / "service" / "pod")
+    global_scripts = discover_scripts(src_dir / "service")
+    drive_scripts = discover_scripts(src_dir / "service" / "pod")
 
     print("=== Launching BITU Background Services (Console Output Active) ===", flush=True)
     procs: list[subprocess.Popen] = []

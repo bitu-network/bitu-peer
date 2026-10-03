@@ -42,6 +42,7 @@ from nacl.signing import VerifyKey
 
 from pod.users import parse_identity
 
+
 TRUST_HEADER = "bitu-trust"
 DEBT_HEADER = "bitu-debt"
 

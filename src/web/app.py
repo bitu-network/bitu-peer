@@ -8,7 +8,7 @@ from pathlib import Path
 
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory
 
-from lib.auth import session_identity
+from web.session import session_identity
 from pod.users import is_member
 from project import get_src_root
 
