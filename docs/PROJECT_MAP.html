@@ -1,0 +1,529 @@
+<!-- file: docs/PROJECT_MAP.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Project Map</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<style>
+  :root { --out:#ff4d4f; --in:#40a9ff; --both:#d29922; --int:#56d364; --accent:#38edf8; }
+  html, body { margin:0; height:100%; background:#05070a; color:#f0f6fc;
+    font:12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  svg { display:block; }
+  rect { vector-effect:non-scaling-stroke; shape-rendering:crispEdges; }
+
+  /* File tiles: a dark 1px edge keeps neighbours from merging */
+  .leaf rect.tile { stroke:rgba(0,0,0,0.6); stroke-width:1px; cursor:pointer; }
+  .leaf text { pointer-events:none; font-weight:500; }
+
+  /* Folders: solid boxes, the thick top padding carries the folder name */
+  .folder rect.fbox { stroke:#454f5d; stroke-width:1px; cursor:pointer; }
+  .folder text { pointer-events:none; font-weight:600; fill:#aeb9c6; }
+
+  /* Hovered file/folder + all its parent folders: plain white outlines */
+  .frame { fill:none; stroke:#fff; stroke-width:1.5px; pointer-events:none; }
+  .frame.self { stroke-width:2px; }
+
+  /* Dependency relations: coloured stroke only */
+  .leaf.out rect.tile  { stroke:var(--out) !important; stroke-width:2px !important; }
+  .leaf.in rect.tile   { stroke:var(--in) !important; stroke-width:2px !important; }
+  .leaf.both rect.tile { stroke:var(--both) !important; stroke-width:2px !important; }
+  .leaf.int rect.tile  { stroke:var(--int) !important; stroke-width:2px !important; }
+
+  .dep-link { fill:none; stroke-width:1.8px; vector-effect:non-scaling-stroke; pointer-events:none; opacity:.95; }
+  .dep-link.out { stroke:var(--out); } .dep-dot.out { fill:var(--out); }
+  .dep-link.in  { stroke:var(--in); }  .dep-dot.in  { fill:var(--in); }
+  .dep-link.both{ stroke:var(--both);} .dep-dot.both{ fill:var(--both); }
+  .dep-link.int { stroke:var(--int); }  .dep-dot.int  { fill:var(--int); }
+  .dep-dot { pointer-events:none; }
+
+  .panel { position:absolute; background:rgba(13,17,23,.94); border:1px solid #30363d;
+    border-radius:8px; padding:10px 14px; pointer-events:none; z-index:10; }
+  #info { max-width:440px; border-color:var(--accent); }
+  #info.hidden { display:none; }
+  #title { font-size:13px; font-weight:600; color:#58a6ff; word-break:break-all; margin-bottom:4px; }
+  #body div { color:#8b949e; word-break:break-all; line-height:1.5; }
+  #body .h-out { color:var(--out); font-weight:600; margin-top:4px; }
+  #body .h-in { color:var(--in); font-weight:600; margin-top:4px; }
+  #body .h-both { color:var(--both); font-weight:600; margin-top:4px; }
+  #body .h-int { color:var(--int); font-weight:600; margin-top:4px; }
+  #body .mode { color:#6e7681; margin-bottom:2px; }
+  #body .item { padding-left:10px; color:#c9d1d9; }
+  
+  #legend { bottom:12px; left:12px; transition: opacity 0.2s, transform 0.2s; }
+  #legend.hidden { opacity:0; transform:translateY(10px); pointer-events:none; }
+  #legend div { display:flex; align-items:center; gap:8px; color:#c9d1d9; line-height:1.7; }
+  #legend i { width:10px; height:10px; border-radius:2px; display:inline-block; border:1px solid rgba(255,255,255,.2); }
+  #legend span { color:#8b949e; margin-left:auto; padding-left:12px; }
+</style>
+</head>
+<body>
+<div id="info" class="panel hidden"><div id="title"></div><div id="body"></div></div>
+<div id="legend" class="panel hidden"></div>
+<svg id="canvas"></svg>
+
+<script src="PROJECT_MAP.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// Data: window.PROJECT_MAP, set by the sibling PROJECT_MAP.js that the code_map
+// watcher keeps up to date (see lib/project_graph.py for the schema).
+// Flat "files" keyed by path; absent field = empty.  Reload (F5) to refresh.
+// ---------------------------------------------------------------------------
+if (!window.PROJECT_MAP) {
+  document.body.innerHTML = '<p style="padding:24px;font-size:14px">PROJECT_MAP.js not found next to this page. '
+    + 'Start the watcher: <code>python -m cli.dev.watch</code></p>';
+  throw new Error("PROJECT_MAP.js missing");
+}
+
+// GitHub Linguist colours, keyed by language
+const LANGUAGE_COLORS = {
+  Python: "#3572A5", JavaScript: "#f1e05a", TypeScript: "#3178c6",
+  Go: "#00ADD8", Rust: "#dea584", C: "#555555", "C++": "#f34b7d",
+  Java: "#b07219", "C#": "#178600", Ruby: "#701516", PHP: "#4F5D95",
+  Swift: "#F05138", Kotlin: "#A97BFF", Shell: "#89e051",
+  Batchfile: "#C1F12E", PowerShell: "#012456", Lua: "#000080",
+  HTML: "#e34c26", CSS: "#563d7c", SCSS: "#c6538c", Vue: "#41b883",
+  Svelte: "#ff3e00", JSON: "#292929", YAML: "#cb171e",
+  TOML: "#9c4221", XML: "#0060ac", Markdown: "#083fa1",
+  SQL: "#e38c00", INI: "#d1d1d1", Dockerfile: "#384d54",
+  Makefile: "#427819",
+};
+const OTHER_COLOR = "#8b949e";
+const LANGUAGE_EXTENSIONS = {
+  Python: [".py", ".pyi", ".pyw"], JavaScript: [".js", ".mjs", ".cjs", ".jsx"],
+  TypeScript: [".ts", ".mts", ".cts", ".tsx"], Go: [".go"], Rust: [".rs"],
+  C: [".c", ".h"], "C++": [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"],
+  Java: [".java"], "C#": [".cs"], Ruby: [".rb"], PHP: [".php"],
+  Swift: [".swift"], Kotlin: [".kt", ".kts"], Shell: [".sh", ".bash", ".zsh"],
+  Batchfile: [".bat", ".cmd"], PowerShell: [".ps1", ".psm1"], Lua: [".lua"],
+  HTML: [".html", ".htm"], CSS: [".css"], SCSS: [".scss"], Vue: [".vue"],
+  Svelte: [".svelte"], JSON: [".json", ".jsonc"], YAML: [".yaml", ".yml"],
+  TOML: [".toml"], XML: [".xml"], Markdown: [".md", ".markdown"],
+  SQL: [".sql"], INI: [".ini"],
+};
+const EXT_TO_LANGUAGE = {};
+Object.entries(LANGUAGE_EXTENSIONS).forEach(([lang, exts]) => exts.forEach(e => { EXT_TO_LANGUAGE[e] = lang; }));
+const FILENAME_TO_LANGUAGE = { dockerfile: "Dockerfile", makefile: "Makefile" };
+const HIDDEN_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".ico"]);
+
+function classify(path) {
+  const name = path.slice(path.lastIndexOf("/") + 1).toLowerCase();
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot) : "";
+  const lang = FILENAME_TO_LANGUAGE[name] || EXT_TO_LANGUAGE[ext];
+  return lang ? [lang, LANGUAGE_COLORS[lang]] : ["Other", OTHER_COLOR];
+}
+
+// Flat map -> { hierarchy (folders nested from the path keys), links (file -> file imports) }
+function buildPayload(map) {
+  const root = { name: map.root || "project", id: "", children: [] };
+  const folders = new Map([["", root]]);
+  const shown = new Set();
+  const folder = path => {
+    if (folders.has(path)) return folders.get(path);
+    const cut = path.lastIndexOf("/");
+    const node = { name: path.slice(cut + 1), id: path, children: [] };
+    folder(cut < 0 ? "" : path.slice(0, cut)).children.push(node);
+    folders.set(path, node);
+    return node;
+  };
+
+  Object.entries(map.files).forEach(([path, f]) => {
+    const dot = path.lastIndexOf(".");
+    if (HIDDEN_EXTENSIONS.has(dot > 0 ? path.slice(dot).toLowerCase() : "")) return;
+    const cut = path.lastIndexOf("/");
+    const [lang, color] = classify(path);
+    folder(cut < 0 ? "" : path.slice(0, cut)).children.push({
+      name: path.slice(cut + 1), id: path, value: Math.max(1, f.size || 0), color, lang, doc: f.doc,
+    });
+    shown.add(path);
+  });
+
+  const links = [];
+  Object.entries(map.files).forEach(([path, f]) => {
+    if (!shown.has(path)) return;
+    (f.imports || []).forEach(target => { if (shown.has(target)) links.push({ source: path, target }); });
+  });
+  return { hierarchy: root, links };
+}
+
+const payload = buildPayload(window.PROJECT_MAP);
+
+const MAX_LIST = 8;
+const MAX_LINES = 2500;      // safety cap when a folder has a huge number of links
+const OUTER_PAD = 3;         // constant: layout never depends on hover
+const HEADER_H = 15;         // thick top padding that holds the folder name
+const HEADER_MIN_W = 36;     // folders narrower than this keep the thin padding
+const HEADER_MIN_BODY = 16;  // ...and so do folders that would be all header
+
+const fmtBytes = n => {
+  const u = ["B", "KB", "MB", "GB"]; let i = 0;
+  while (n >= 1024 && i < 3) { n /= 1024; i++; }
+  return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + " " + u[i];
+};
+
+const CHAR_W = 5.8;
+
+// Horizontal by default; vertical (reading downwards) when the name does not fit
+// the tile's width but the tile is taller than it is wide.
+function label(d, k) {
+  const W = (d.x1 - d.x0) * k, H = (d.y1 - d.y0) * k;
+  const name = d.data.name;
+  const hCap = H > 14 ? Math.floor((W - 8) / CHAR_W) : 0;
+  const vCap = W > 14 ? Math.floor((H - 8) / CHAR_W) : 0;
+  const vertical = name.length > hCap && vCap > hCap;
+  const cap = vertical ? vCap : hCap;
+  const text = cap <= 2 ? "" : (name.length > cap ? name.slice(0, cap - 1) + "…" : name);
+  return { text, vertical };
+}
+
+// Folder name inside its header strip; hidden when the strip is missing or too narrow.
+function folderLabel(d, k) {
+  if (!d.hdr) return "";
+  const cap = Math.floor(((d.x1 - d.x0) * k - 8) / (CHAR_W + 0.4));
+  const name = d.data.name;
+  return cap <= 2 ? "" : (name.length > cap ? name.slice(0, cap - 1) + "…" : name);
+}
+
+function layoutLabels() {
+  if (!leafSel) return;
+  const k = transform.k;
+  if (folderSel) {
+    folderSel.select("text")
+      .style("font-size", `${10 / k}px`)
+      .attr("transform", `translate(${4 / k},${11 / k})`)
+      .text(d => folderLabel(d, k));
+  }
+  leafSel.select("text")
+    .style("font-size", `${10 / k}px`)
+    .each(function (d) {
+      const l = label(d, k);
+      d3.select(this).text(l.text).attr("transform", l.vertical
+        ? `translate(${4 / k},${4 / k}) rotate(90)`
+        : `translate(${4 / k},${12 / k})`);
+    });
+}
+
+const cx = n => (n.x0 + n.x1) / 2, cy = n => (n.y0 + n.y1) / 2;
+const push = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
+
+const outMap = new Map(), inMap = new Map();
+payload.links.forEach(l => { push(outMap, l.source, l.target); push(inMap, l.target, l.source); });
+
+const svg = d3.select("#canvas");
+const gRoot = svg.append("g");
+const infoEl = document.getElementById("info");
+const infoTitle = document.getElementById("title");
+const infoBody = document.getElementById("body");
+const legendEl = document.getElementById("legend");
+
+let transform = d3.zoomIdentity;
+let hovered = null;          // file or folder under the mouse
+let clicked = null;          // clicked element; always cleared when the mouse leaves it
+let folderMode = "external"; // remembered between folders: "external" | "internal"
+let byId = new Map(), leafSel = null, folderSel = null, frameG = null, linkG = null;
+const folderCache = new Map();
+
+const zoom = d3.zoom().scaleExtent([1, 80]).on("zoom", e => {
+  transform = e.transform;
+  gRoot.attr("transform", transform);
+
+  if (linkG) linkG.selectAll("circle").attr("r", 3.5 / transform.k);
+
+  layoutLabels();
+});
+
+svg.call(zoom).on("dblclick.zoom", null);
+svg.on("click", () => { clicked = null; refresh(); });
+
+window.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    clicked = null;
+    refresh();
+  } else if (e.key === "?" || e.key === "/") {
+    legendEl.classList.toggle("hidden");
+  }
+});
+
+function setInfo(title, rows) {
+  infoTitle.textContent = title;
+  infoBody.replaceChildren();
+  rows.forEach(([text, cls]) => {
+    const d = document.createElement("div");
+    d.textContent = text;
+    if (cls) d.className = cls;
+    infoBody.appendChild(d);
+  });
+}
+
+// Keep the info box next to the cursor, flipped away from the screen edges.
+function placePanel(e) {
+  if (infoEl.classList.contains("hidden")) return;
+  const w = infoEl.offsetWidth, h = infoEl.offsetHeight, m = 8, gap = 16;
+  let x = e.clientX + gap, y = e.clientY + gap;
+  if (x + w > window.innerWidth - m) x = e.clientX - w - gap;
+  if (y + h > window.innerHeight - m) y = e.clientY - h - gap;
+  infoEl.style.left = Math.max(m, x) + "px";
+  infoEl.style.top = Math.max(m, y) + "px";
+}
+
+// Links of every file inside a folder (any depth), split into internal / outgoing / incoming.
+function folderStats(node) {
+  const key = node.data.id;
+  if (folderCache.has(key)) return folderCache.get(key);
+  const inside = new Set(node.leaves().map(l => l.data.id));
+  const internal = [], outgoing = [], incoming = [];
+  payload.links.forEach(l => {
+    const s = inside.has(l.source), t = inside.has(l.target);
+    if (s && t) internal.push(l);
+    else if (s) outgoing.push(l);
+    else if (t) incoming.push(l);
+  });
+  const res = { files: inside.size, internal, outgoing, incoming };
+  folderCache.set(key, res);
+  return res;
+}
+
+function curve(a, b) {
+  const ax = cx(a), ay = cy(a), bx = cx(b), by = cy(b);
+  const dx = bx - ax, dy = by - ay;
+  const qx = (ax + bx) / 2 - dy * 0.12, qy = (ay + by) / 2 + dx * 0.12;
+  return `M${ax},${ay}Q${qx},${qy} ${bx},${by}`;
+}
+
+function listRows(header, cls, ids) {
+  const rows = [[`${header} (${ids.length})`, cls]];
+  ids.slice(0, MAX_LIST).forEach(id => rows.push([id, "item"]));
+  if (ids.length > MAX_LIST) rows.push([`+ ${ids.length - MAX_LIST} more`, "item"]);
+  return rows;
+}
+
+function relations(id) {
+  const outs = id ? (outMap.get(id) || []) : [];
+  const ins = id ? (inMap.get(id) || []) : [];
+  const inSet = new Set(ins);
+  const both = new Set(outs.filter(o => inSet.has(o)));
+  const outOnly = new Set(outs.filter(o => !both.has(o)));
+  const inOnly = new Set(ins.filter(i => !both.has(i)));
+  return { outs, ins, both, outOnly, inOnly };
+}
+
+function refresh() {
+  const active = hovered;
+  const isLeaf = !!active && !active.children;
+  const peek = active && active.children && clicked === active ? folderStats(active) : null;
+
+  // Frames: ancestors (shallow -> deep, root skipped) then the active node on top
+  frameG.selectAll("*").remove();
+  if (active) {
+    const chain = [];
+    for (let n = active; n; n = n.parent) if (n.parent) chain.unshift(n);
+
+    // One white frame per level of the lineage; the node itself is slightly thicker
+    chain.forEach(n => {
+      frameG.append("rect")
+        .attr("class", n === active ? "frame self" : "frame")
+        .attr("x", n.x0).attr("y", n.y0)
+        .attr("width", Math.max(0, n.x1 - n.x0)).attr("height", Math.max(0, n.y1 - n.y0));
+    });
+  }
+
+  // What to colour and what to draw: [fromId, toId, type] plus dot positions
+  const cls = new Map(), lines = [], dots = new Map();
+  if (isLeaf) {
+    const id = active.data.id;
+    const { outOnly, inOnly, both } = relations(id);
+    [[outOnly, "out"], [inOnly, "in"], [both, "both"]].forEach(([set, type]) => {
+      set.forEach(k => { cls.set(k, type); lines.push([id, k, type]); dots.set(`${k}|${type}`, [k, type]); });
+    });
+  } else if (peek && folderMode === "internal") {
+    peek.internal.forEach(l => {
+      cls.set(l.source, "int"); cls.set(l.target, "int");
+      lines.push([l.source, l.target, "int"]);
+      dots.set(`${l.source}|int`, [l.source, "int"]); dots.set(`${l.target}|int`, [l.target, "int"]);
+    });
+  } else if (peek) {
+    const outT = new Set(peek.outgoing.map(l => l.target));
+    const inS = new Set(peek.incoming.map(l => l.source));
+    outT.forEach(k => cls.set(k, inS.has(k) ? "both" : "out"));
+    inS.forEach(k => { if (!outT.has(k)) cls.set(k, "in"); });
+    peek.outgoing.forEach(l => { lines.push([l.source, l.target, "out"]); dots.set(`${l.target}|out`, [l.target, "out"]); });
+    peek.incoming.forEach(l => { lines.push([l.source, l.target, "in"]); dots.set(`${l.source}|in`, [l.source, "in"]); });
+  }
+
+  leafSel.attr("class", d => {
+    if (d === active) return "leaf sel";
+    return cls.has(d.data.id) ? `leaf ${cls.get(d.data.id)}` : "leaf";
+  });
+  if (isLeaf) leafSel.filter(d => d === active).raise();
+
+  linkG.selectAll("*").remove();
+  const op = Math.max(0.25, Math.min(0.95, 150 / Math.max(1, lines.length)));
+  lines.slice(0, MAX_LINES).forEach(([a, b, type]) => {
+    const na = byId.get(a), nb = byId.get(b);
+    if (!na || !nb) return;
+    linkG.append("path").attr("class", `dep-link ${type}`).attr("d", curve(na, nb)).style("opacity", op);
+  });
+  dots.forEach(([k, type]) => {
+    const o = byId.get(k);
+    if (!o) return;
+    linkG.append("circle").attr("class", `dep-dot ${type}`)
+      .attr("cx", cx(o)).attr("cy", cy(o)).attr("r", 3.5 / transform.k);
+  });
+
+  // Info box: only for the clicked element, only while the mouse is still on it
+  const shown = clicked && clicked === active ? clicked : null;
+  if (shown && isLeaf) {
+    const id = shown.data.id;
+    const r = relations(id);
+    const rows = [[`${shown.data.lang} · ${fmtBytes(shown.data.value)}`]];
+    if (shown.data.doc) rows.push([shown.data.doc, "item"]);
+    if (r.outs.length) rows.push(...listRows("→ imports", "h-out", r.outs));
+    if (r.ins.length) rows.push(...listRows("← imported by", "h-in", r.ins));
+    if (r.both.size) rows.push(...listRows("⟲ circular with", "h-both", [...r.both]));
+    if (!r.outs.length && !r.ins.length) rows.push(["No resolved internal dependencies"]);
+    setInfo(id.split("/").join("  /  "), rows);
+    infoEl.classList.remove("hidden");
+  } else if (shown) {
+    const s = peek;
+    const prefix = shown.data.id + "/";
+    const rel = id => id.startsWith(prefix) ? id.slice(prefix.length) : id;
+    const uniq = a => [...new Set(a)];
+    const rows = [[`${s.files} files · ${fmtBytes(shown.value)}`]];
+    let drawn;
+    if (folderMode === "external") {
+      const outF = uniq(s.outgoing.map(l => l.target)), inF = uniq(s.incoming.map(l => l.source));
+      drawn = s.outgoing.length + s.incoming.length;
+      rows.push([`external links · click for internal (${s.internal.length})`, "mode"]);
+      if (outF.length) rows.push(...listRows("→ imports from outside", "h-out", outF));
+      if (inF.length) rows.push(...listRows("← imported from outside", "h-in", inF));
+      if (!outF.length && !inF.length) rows.push(["No external dependencies"]);
+    } else {
+      drawn = s.internal.length;
+      rows.push([`internal links · click for external (${s.outgoing.length + s.incoming.length})`, "mode"]);
+      const pairs = s.internal.map(l => `${rel(l.source)} → ${rel(l.target)}`);
+      if (pairs.length) rows.push(...listRows("⇄ internal", "h-int", pairs));
+      else rows.push(["No internal dependencies"]);
+    }
+    if (drawn > MAX_LINES) rows.push([`Drawing the first ${MAX_LINES} of ${drawn} links`, "mode"]);
+    setInfo(shown.data.id.split("/").join("  /  ") + "  /", rows);
+    infoEl.classList.remove("hidden");
+  } else {
+    infoEl.classList.add("hidden");
+  }
+}
+
+function buildLegend(leaves) {
+  const bytes = new Map(); let total = 0;
+  leaves.forEach(l => {
+    const k = l.data.lang;
+    const e = bytes.get(k) || { color: l.data.color, v: 0 };
+    e.v += l.data.value; total += l.data.value; bytes.set(k, e);
+  });
+
+  legendEl.replaceChildren();
+  [...bytes.entries()].sort((a, b) => b[1].v - a[1].v).slice(0, 10).forEach(([name, e]) => {
+    const row = document.createElement("div");
+    const sw = document.createElement("i"); sw.style.background = e.color;
+    const label = document.createElement("div"); label.textContent = name; label.style.display = "inline";
+    const pct = document.createElement("span"); pct.textContent = (100 * e.v / total).toFixed(1) + "%";
+    row.append(sw, label, pct);
+    legendEl.appendChild(row);
+  });
+}
+
+function render() {
+  const width = window.innerWidth, height = window.innerHeight;
+  svg.attr("width", width).attr("height", height);
+  gRoot.selectAll("*").remove();
+
+  const root = d3.hierarchy(payload.hierarchy)
+    .sum(d => d.children ? 0 : d.value)
+    .sort((a, b) => b.value - a.value);
+
+  d3.treemap()
+    .size([width, height])
+    .round(true)
+    .paddingOuter(OUTER_PAD)
+    .paddingInner(0)
+    .paddingTop(d => {
+      // Thick top padding (header) only where the folder is big enough to use it
+      if (d.depth === 0) return OUTER_PAD;
+      const show = (d.x1 - d.x0) >= HEADER_MIN_W && (d.y1 - d.y0) >= HEADER_H + HEADER_MIN_BODY;
+      d.hdr = show ? HEADER_H : 0;
+      return show ? HEADER_H : OUTER_PAD;
+    })(root);
+
+  byId = new Map();
+  root.descendants().forEach(d => byId.set(d.data.id, d));
+
+  const w = d => Math.max(0, d.x1 - d.x0), h = d => Math.max(0, d.y1 - d.y0);
+
+  // Folders: drawn first (parents before children) so files and sub-folders cover them;
+  // what stays uncovered is the folder's own surface (header + thin padding).
+  const folders = root.descendants().filter(d => d.children && d.depth > 0);
+  const shade = d3.scaleLinear().domain([1, Math.max(2, root.height - 1)])
+    .range(["#1a212b", "#303b49"]).clamp(true);
+  folderSel = gRoot.append("g").selectAll("g")
+    .data(folders).join("g")
+    .attr("class", "folder")
+    .attr("transform", d => `translate(${d.x0},${d.y0})`);
+  folderSel.append("rect").attr("class", "fbox")
+    .attr("width", w).attr("height", h)
+    .attr("fill", d => shade(d.depth));
+  folderSel.append("text");
+
+  // Files
+  leafSel = gRoot.append("g").selectAll("g")
+    .data(root.leaves()).join("g")
+    .attr("class", "leaf")
+    .attr("transform", d => `translate(${d.x0},${d.y0})`);
+
+  leafSel.append("rect").attr("class", "tile")
+    .attr("width", w)
+    .attr("height", h)
+    .attr("fill", d => d.data.color);
+  leafSel.append("text")
+    .attr("fill", d => d3.lab(d.data.color).l > 62 ? "#0d1117" : "#f0f6fc");
+  layoutLabels();
+
+  const enter = (e, d) => { e.stopPropagation(); hovered = d; refresh(); };
+  const leave = () => { hovered = null; clicked = null; refresh(); };
+  const move = e => { if (clicked) placePanel(e); };
+
+  leafSel
+    .on("mouseover", enter)
+    .on("mouseout", leave)
+    .on("mousemove", move)
+    .on("click", (e, d) => {
+      e.stopPropagation();
+      clicked = d;
+      refresh();
+      placePanel(e);
+    });
+
+  folderSel
+    .on("mouseover", enter)
+    .on("mouseout", leave)
+    .on("mousemove", move)
+    .on("click", (e, d) => {
+      e.stopPropagation();
+      if (clicked === d) folderMode = folderMode === "external" ? "internal" : "external";
+      else clicked = d;
+      refresh();
+      placePanel(e);
+    });
+
+  frameG = gRoot.append("g");
+  linkG = gRoot.append("g");
+  buildLegend(root.leaves());
+  hovered = null; clicked = null;
+  refresh();
+}
+
+let resizeTimer = null;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(render, 150); });
+render();
+</script>
+</body>
+</html>
